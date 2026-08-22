@@ -23,7 +23,7 @@ export default function Header() {
       <div className="flex items-center justify-between px-4">
         <div className="flex items-center gap-2 text-blue-500">
           <BarChart2 className="w-6 h-6" />
-          <h1 className="text-xl font-bold text-gray-100">Antigravity 부동산 시뮬레이터</h1>
+          <h1 className="text-xl font-bold text-gray-100">부동산 시뮬레이터</h1>
         </div>
         
         <div className="flex items-center gap-4">
