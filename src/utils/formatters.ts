@@ -17,6 +17,15 @@ export const formatManWon = (value: number): string => {
   return result.trim();
 };
 
+export const formatManWonCompact = (value: number): string => {
+  if (value === 0) return '0';
+  if (value >= 10000) {
+    const uk = value / 10000;
+    return uk % 1 === 0 ? `${uk}억` : `${uk.toFixed(1)}억`;
+  }
+  return `${value.toLocaleString()}만`;
+};
+
 export const formatPercent = (value: number, decimals: number = 1): string => {
   return `${(value * 100).toFixed(decimals)}%`;
 };

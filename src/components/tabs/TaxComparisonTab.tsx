@@ -1,14 +1,20 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSimStore } from '../../store/useSimStore';
 import { calculateAnnualHoldingTax } from '../../engine/taxEngine';
 import { calculateHSI, calculateMortgagePayment, getHsiLevel } from '../../engine/stressEngine';
-import { formatManWon, formatPercent } from '../../utils/formatters';
+import { formatManWon, formatManWonCompact, formatPercent } from '../../utils/formatters';
 import { getHsiColor, getHsiLabel } from '../../utils/colorScale';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ShieldAlert, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, AlertTriangle, CheckCircle2, Sliders, RotateCcw } from 'lucide-react';
 
 export default function TaxComparisonTab() {
   const { params } = useSimStore();
+
+  // Y축 최대값 제어 (단위: 만원)
+  // 좌측 Y축 기본값: 40억 (400,000만원)
+  // 우측 Y축 기본값: 5천만원 (5,000만원)
+  const [leftYMax, setLeftYMax] = useState<number>(400000);
+  const [rightYMax, setRightYMax] = useState<number>(5000);
 
   const comparisonData = useMemo(() => {
     const scenarios = [
@@ -76,6 +82,11 @@ export default function TaxComparisonTab() {
       tax3: t3.totalAnnual
     };
   });
+
+  const handleResetYAxis = () => {
+    setLeftYMax(400000);
+    setRightYMax(5000);
+  };
 
   return (
     <div className="p-6 space-y-8 text-gray-200 max-w-7xl mx-auto">
@@ -162,25 +173,120 @@ export default function TaxComparisonTab() {
         })}
       </div>
 
-      {/* 연간 세부담 차트 */}
-      <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
-        <h3 className="text-lg font-bold mb-1 text-gray-100">항목별 연간 지출 비교</h3>
-        <p className="text-xs text-gray-400 mb-6">주택 수에 따른 세금(재산세·종부세) 및 금융비용의 비대칭적 증가</p>
-        <div className="h-80 w-full">
+      {/* 이중 Y축 연간 세부담 & 지출 차트 */}
+      <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-gray-100">항목별 연간 지출 비교 (이중 Y축)</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              좌측 Y축: <span className="text-purple-400 font-semibold">대출 원리금</span> & <span className="text-red-400 font-semibold">순보유비용</span> | 
+              우측 Y축: <span className="text-blue-400 font-semibold">재산세</span> & <span className="text-orange-400 font-semibold">종합부동산세</span>
+            </p>
+          </div>
+          <button
+            onClick={handleResetYAxis}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium text-gray-300 transition-colors self-start sm:self-auto border border-gray-700"
+          >
+            <RotateCcw size={13} />
+            Y축 기본값 초기화
+          </button>
+        </div>
+
+        {/* Y축 최대값 조절 슬라이더 패널 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg bg-gray-800/60 border border-gray-700/60 text-xs">
+          {/* 좌측 Y축 슬라이더 (원리금/순보유비용 - 최대 40억 기준) */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-gray-300 flex items-center gap-1.5">
+                <Sliders size={13} className="text-purple-400" />
+                좌측 Y축 최대값 (원리금·순비용)
+              </span>
+              <span className="font-bold text-purple-300 text-sm">{formatManWon(leftYMax)}</span>
+            </div>
+            <input
+              type="range"
+              min={10000}
+              max={500000}
+              step={10000}
+              value={leftYMax}
+              onChange={(e) => setLeftYMax(Number(e.target.value))}
+              className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+            />
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>1억</span>
+              <span>20억</span>
+              <span>40억 (기본)</span>
+              <span>50억</span>
+            </div>
+          </div>
+
+          {/* 우측 Y축 슬라이더 (재산세/종부세 - 최대 5천만원 기준) */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-gray-300 flex items-center gap-1.5">
+                <Sliders size={13} className="text-orange-400" />
+                우측 Y축 최대값 (재산세·종부세)
+              </span>
+              <span className="font-bold text-orange-300 text-sm">{formatManWon(rightYMax)}</span>
+            </div>
+            <input
+              type="range"
+              min={1000}
+              max={20000}
+              step={500}
+              value={rightYMax}
+              onChange={(e) => setRightYMax(Number(e.target.value))}
+              className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+            />
+            <div className="flex justify-between text-[10px] text-gray-400">
+              <span>1,000만</span>
+              <span>5,000만 (기본)</span>
+              <span>1억</span>
+              <span>2억</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 차트 영역 */}
+        <div className="h-88 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <BarChart data={chartData} margin={{ top: 20, right: 35, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="name" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" tickFormatter={(v) => `${Math.round(v / 10000)}억`} />
+              <XAxis dataKey="name" stroke="#9ca3af" tick={{ fill: '#d1d5db' }} />
+              
+              {/* 좌측 Y축: 원리금 및 순보유비용 */}
+              <YAxis
+                yAxisId="left"
+                orientation="left"
+                domain={[0, leftYMax]}
+                stroke="#a78bfa"
+                tickFormatter={(v) => formatManWonCompact(v)}
+                label={{ value: '원리금/순보유비용', angle: -90, position: 'insideLeft', fill: '#a78bfa', fontSize: 11 }}
+              />
+
+              {/* 우측 Y축: 재산세 및 종합부동산세 */}
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                domain={[0, rightYMax]}
+                stroke="#fb923c"
+                tickFormatter={(v) => formatManWonCompact(v)}
+                label={{ value: '재산세/종합부동산세', angle: 90, position: 'insideRight', fill: '#fb923c', fontSize: 11 }}
+              />
+
               <Tooltip
                 contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#f3f4f6', borderRadius: '8px' }}
-                formatter={(val: number) => [formatManWon(val), '']}
+                formatter={(val: number, name: string) => [formatManWon(val), name]}
               />
-              <Legend wrapperStyle={{ color: '#d1d5db' }} />
-              <Bar dataKey="재산세" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="종합부동산세" fill="#f97316" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="대출 원리금" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="순보유비용" fill="#ef4444" radius={[4, 4, 0, 0]} />
+              <Legend wrapperStyle={{ color: '#d1d5db', paddingTop: '10px' }} />
+              
+              {/* 우측 Y축 바 (세금 항목) */}
+              <Bar yAxisId="right" dataKey="재산세" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="right" dataKey="종합부동산세" fill="#f97316" radius={[4, 4, 0, 0]} />
+              
+              {/* 좌측 Y축 바 (금융 및 순비용 항목) */}
+              <Bar yAxisId="left" dataKey="대출 원리금" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="left" dataKey="순보유비용" fill="#ef4444" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
