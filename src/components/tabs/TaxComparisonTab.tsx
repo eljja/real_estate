@@ -4,8 +4,18 @@ import { calculateAnnualHoldingTax } from '../../engine/taxEngine';
 import { calculateHSI, calculateMortgagePayment, getHsiLevel } from '../../engine/stressEngine';
 import { formatManWon, formatManWonCompact, formatPercent } from '../../utils/formatters';
 import { getHsiColor, getHsiLabel } from '../../utils/colorScale';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, AlertTriangle, CheckCircle2, Sliders, RotateCcw } from 'lucide-react';
+import {
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
+import { TrendingUp, AlertTriangle, CheckCircle2, Sliders, RotateCcw, Eye } from 'lucide-react';
 
 export default function TaxComparisonTab() {
   const { params } = useSimStore();
@@ -15,6 +25,16 @@ export default function TaxComparisonTab() {
   // 우측 Y축 기본값: 5천만원 (5,000만원)
   const [leftYMax, setLeftYMax] = useState<number>(400000);
   const [rightYMax, setRightYMax] = useState<number>(5000);
+  const [show2026Baseline, setShow2026Baseline] = useState<boolean>(true);
+
+  // 2026 현행 기준 상수 파라미터
+  const BASELINE_2026 = useMemo(() => ({
+    fairValueRatio: 0.60,
+    cptMultiplier: 1.0,
+    multiHomeSurcharge: false,
+    baseRate: 3.0,
+    conversionRate: 4.8
+  }), []);
 
   const comparisonData = useMemo(() => {
     const scenarios = [
@@ -27,6 +47,7 @@ export default function TaxComparisonTab() {
       const officialPrice = params.propertyPrice * 0.69;
       const totalOfficialPrices = officialPrice * sc.homes;
 
+      // 1. 현재 사용자가 조절한 파라미터 기준 계산
       const holdingTax = calculateAnnualHoldingTax(
         officialPrice,
         totalOfficialPrices,
@@ -41,11 +62,27 @@ export default function TaxComparisonTab() {
       );
 
       const annualMortgage = calculateMortgagePayment(params.mortgagePrincipal, params.baseRate + 1.5, params.mortgageYears);
-      // 다주택자의 경우 1채당 예상 월세 수입 (전월세전환율 반영)
       const rentalIncomePerExtraHome = (params.propertyPrice * 0.5 * (params.conversionRate / 100));
       const rentalIncome = sc.homes > 1 ? Math.round(rentalIncomePerExtraHome * (sc.homes - 1)) : 0;
-
       const hsiResult = calculateHSI(holdingTax.totalAnnual, annualMortgage, rentalIncome, params.annualIncome);
+
+      // 2. [2026 현행 기준] Benchmark 계산
+      const baseHoldingTax = calculateAnnualHoldingTax(
+        officialPrice,
+        totalOfficialPrices,
+        sc.homes,
+        params.ownerAge,
+        params.holdingYears,
+        {
+          fairValueRatio: BASELINE_2026.fairValueRatio,
+          cptMultiplier: BASELINE_2026.cptMultiplier,
+          multiHomeSurcharge: BASELINE_2026.multiHomeSurcharge
+        }
+      );
+      const baseAnnualMortgage = calculateMortgagePayment(params.mortgagePrincipal, BASELINE_2026.baseRate + 1.5, params.mortgageYears);
+      const baseRentalIncomePerExtra = (params.propertyPrice * 0.5 * (BASELINE_2026.conversionRate / 100));
+      const baseRentalIncome = sc.homes > 1 ? Math.round(baseRentalIncomePerExtra * (sc.homes - 1)) : 0;
+      const baseHsiResult = calculateHSI(baseHoldingTax.totalAnnual, baseAnnualMortgage, baseRentalIncome, params.annualIncome);
 
       return {
         ...sc,
@@ -54,17 +91,29 @@ export default function TaxComparisonTab() {
         holdingTax,
         annualMortgage,
         rentalIncome,
-        hsiResult
+        hsiResult,
+        baseHoldingTax,
+        baseAnnualMortgage,
+        baseRentalIncome,
+        baseHsiResult
       };
     });
-  }, [params]);
+  }, [params, BASELINE_2026]);
 
   const chartData = comparisonData.map(d => ({
     name: d.label.split(' ')[0],
+    
+    // 현재 시나리오 (실제 막대 그래프)
     '재산세': Math.round(d.holdingTax.propertyTax.totalPropertyTax * d.homes),
     '종합부동산세': Math.round(d.holdingTax.comprehensiveTax.totalComprehensiveTax),
     '대출 원리금': Math.round(d.annualMortgage),
-    '순보유비용': Math.round(Math.max(0, d.hsiResult.totalAnnualCost - d.hsiResult.annualRentalIncome))
+    '순보유비용': Math.round(Math.max(0, d.hsiResult.totalAnnualCost - d.hsiResult.annualRentalIncome)),
+
+    // 2026 현행 기준 (점선 Reference Line)
+    '2026 현행 재산세': Math.round(d.baseHoldingTax.propertyTax.totalPropertyTax * d.homes),
+    '2026 현행 종부세': Math.round(d.baseHoldingTax.comprehensiveTax.totalComprehensiveTax),
+    '2026 현행 원리금': Math.round(d.baseAnnualMortgage),
+    '2026 현행 순보유비용': Math.round(Math.max(0, d.baseHsiResult.totalAnnualCost - d.baseHsiResult.annualRentalIncome))
   }));
 
   const stressPoints = [100000, 150000, 250000, 350000, 500000].map(price => {
@@ -105,6 +154,7 @@ export default function TaxComparisonTab() {
         {comparisonData.map(d => {
           const color = getHsiColor(d.hsiResult.hsi);
           const isDanger = d.hsiResult.hsi >= 0.7;
+          const taxDiff = d.holdingTax.totalAnnual - d.baseHoldingTax.totalAnnual;
 
           return (
             <div
@@ -133,15 +183,28 @@ export default function TaxComparisonTab() {
                 </div>
                 <div className="flex justify-between border-b border-gray-800 pb-1.5">
                   <span className="text-gray-400">연간 재산세 합계</span>
-                  <span className="font-semibold text-blue-400">{formatManWon(d.holdingTax.propertyTax.totalPropertyTax * d.homes)}</span>
+                  <div className="text-right">
+                    <span className="font-semibold text-blue-400">{formatManWon(d.holdingTax.propertyTax.totalPropertyTax * d.homes)}</span>
+                    <div className="text-[10px] text-gray-400">현행: {formatManWon(d.baseHoldingTax.propertyTax.totalPropertyTax * d.homes)}</div>
+                  </div>
                 </div>
                 <div className="flex justify-between border-b border-gray-800 pb-1.5">
                   <span className="text-gray-400">연간 종합부동산세</span>
-                  <span className="font-semibold text-orange-400">{formatManWon(d.holdingTax.comprehensiveTax.totalComprehensiveTax)}</span>
+                  <div className="text-right">
+                    <span className="font-semibold text-orange-400">{formatManWon(d.holdingTax.comprehensiveTax.totalComprehensiveTax)}</span>
+                    <div className="text-[10px] text-gray-400">현행: {formatManWon(d.baseHoldingTax.comprehensiveTax.totalComprehensiveTax)}</div>
+                  </div>
                 </div>
                 <div className="flex justify-between border-b border-gray-800 pb-1.5">
                   <span className="text-gray-400">총 연간 보유세</span>
-                  <span className="font-bold text-gray-100">{formatManWon(d.holdingTax.totalAnnual)}</span>
+                  <div className="text-right">
+                    <span className="font-bold text-gray-100">{formatManWon(d.holdingTax.totalAnnual)}</span>
+                    {taxDiff !== 0 && (
+                      <div className={`text-[10px] font-semibold ${taxDiff > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                        2026 현행 대비 {taxDiff > 0 ? `+${formatManWon(taxDiff)}` : `-${formatManWon(Math.abs(taxDiff))}`}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex justify-between border-b border-gray-800 pb-1.5">
                   <span className="text-gray-400">연간 대출 원리금</span>
@@ -173,23 +236,39 @@ export default function TaxComparisonTab() {
         })}
       </div>
 
-      {/* 이중 Y축 연간 세부담 & 지출 차트 */}
+      {/* 이중 Y축 연간 세부담 & 지출 차트 (2026 현행 점선 Reference 포함) */}
       <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-bold text-gray-100">항목별 연간 지출 비교 (이중 Y축)</h3>
+            <h3 className="text-lg font-bold text-gray-100 flex items-center gap-2">
+              <span>항목별 연간 지출 비교 (이중 Y축 & 2026 현행 점선 Reference)</span>
+            </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              좌측 Y축: <span className="text-purple-400 font-semibold">대출 원리금</span> & <span className="text-red-400 font-semibold">순보유비용</span> | 
-              우측 Y축: <span className="text-blue-400 font-semibold">재산세</span> & <span className="text-orange-400 font-semibold">종합부동산세</span>
+              <span className="inline-block w-3 h-2 bg-gray-500 rounded-sm mr-1"></span><strong>막대(Bar)</strong>: 현재 조절된 시나리오 | 
+              <span className="inline-block w-3 h-0.5 border-t border-dashed border-gray-300 mx-1"></span><strong>점선(Dashed Line)</strong>: 2026 현행 기준선
             </p>
           </div>
-          <button
-            onClick={handleResetYAxis}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium text-gray-300 transition-colors self-start sm:self-auto border border-gray-700"
-          >
-            <RotateCcw size={13} />
-            Y축 기본값 초기화
-          </button>
+          
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => setShow2026Baseline(!show2026Baseline)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                show2026Baseline
+                  ? 'bg-blue-600/30 border-blue-500 text-blue-300'
+                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Eye size={13} />
+              2026 현행 점선 {show2026Baseline ? '표시 중' : '숨김'}
+            </button>
+            <button
+              onClick={handleResetYAxis}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium text-gray-300 transition-colors border border-gray-700"
+            >
+              <RotateCcw size={13} />
+              Y축 초기화
+            </button>
+          </div>
         </div>
 
         {/* Y축 최대값 조절 슬라이더 패널 */}
@@ -248,9 +327,9 @@ export default function TaxComparisonTab() {
         </div>
 
         {/* 차트 영역 */}
-        <div className="h-88 w-full pt-2">
+        <div className="h-96 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 20, right: 35, left: 20, bottom: 5 }}>
+            <ComposedChart data={chartData} margin={{ top: 20, right: 35, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="name" stroke="#9ca3af" tick={{ fill: '#d1d5db' }} />
               
@@ -275,19 +354,59 @@ export default function TaxComparisonTab() {
               />
 
               <Tooltip
-                contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#f3f4f6', borderRadius: '8px' }}
+                contentStyle={{ backgroundColor: '#111827', borderColor: '#374151', color: '#f3f4f6', borderRadius: '8px', fontSize: '12px' }}
                 formatter={(val: number, name: string) => [formatManWon(val), name]}
               />
-              <Legend wrapperStyle={{ color: '#d1d5db', paddingTop: '10px' }} />
+              <Legend wrapperStyle={{ color: '#d1d5db', paddingTop: '10px', fontSize: '12px' }} />
               
-              {/* 우측 Y축 바 (세금 항목) */}
+              {/* 1. 현재 시나리오 막대 그래프 (Solid Bars) */}
               <Bar yAxisId="right" dataKey="재산세" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               <Bar yAxisId="right" dataKey="종합부동산세" fill="#f97316" radius={[4, 4, 0, 0]} />
-              
-              {/* 좌측 Y축 바 (금융 및 순비용 항목) */}
               <Bar yAxisId="left" dataKey="대출 원리금" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
               <Bar yAxisId="left" dataKey="순보유비용" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
+
+              {/* 2. [2026 현행] 점선 Reference Lines (Dashed Overlays) */}
+              {show2026Baseline && (
+                <>
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="2026 현행 재산세"
+                    stroke="#93c5fd"
+                    strokeDasharray="6 6"
+                    strokeWidth={2.5}
+                    dot={{ r: 4.5, strokeWidth: 2, fill: '#1d4ed8', stroke: '#93c5fd' }}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="2026 현행 종부세"
+                    stroke="#fdba74"
+                    strokeDasharray="6 6"
+                    strokeWidth={2.5}
+                    dot={{ r: 4.5, strokeWidth: 2, fill: '#c2410c', stroke: '#fdba74' }}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="2026 현행 원리금"
+                    stroke="#d8b4fe"
+                    strokeDasharray="6 6"
+                    strokeWidth={2.5}
+                    dot={{ r: 4.5, strokeWidth: 2, fill: '#6b21a8', stroke: '#d8b4fe' }}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="2026 현행 순보유비용"
+                    stroke="#fca5a5"
+                    strokeDasharray="6 6"
+                    strokeWidth={2.5}
+                    dot={{ r: 5, strokeWidth: 2, fill: '#991b1b', stroke: '#fca5a5' }}
+                  />
+                </>
+              )}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
