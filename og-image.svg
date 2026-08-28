@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#030712" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e1b4b" />
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#0f172a" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#ef4444" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)" />
+
+  <!-- Subtle Grid Lines -->
+  <g opacity="0.1" stroke="#94a3b8" stroke-width="1">
+    <line x1="0" y1="100" x2="1200" y2="100" />
+    <line x1="0" y1="200" x2="1200" y2="200" />
+    <line x1="0" y1="300" x2="1200" y2="300" />
+    <line x1="0" y1="400" x2="1200" y2="400" />
+    <line x1="0" y1="500" x2="1200" y2="500" />
+    <line x1="200" y1="0" x2="200" y2="630" />
+    <line x1="400" y1="0" x2="400" y2="630" />
+    <line x1="600" y1="0" x2="600" y2="630" />
+    <line x1="800" y1="0" x2="800" y2="630" />
+    <line x1="1000" y1="0" x2="1000" y2="630" />
+  </g>
+
+  <!-- Left Content Box -->
+  <g transform="translate(80, 100)">
+    <!-- Badge -->
+    <rect width="210" height="36" rx="18" fill="#1e3a8a" stroke="#3b82f6" stroke-width="1.5" />
+    <text x="105" y="23" fill="#60a5fa" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="bold" text-anchor="middle">
+      SEOUL REAL ESTATE
+    </text>
+
+    <!-- Main Title -->
+    <text x="0" y="100" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="54" font-weight="900" letter-spacing="-1">
+      부동산 시뮬레이터
+    </text>
+    <text x="0" y="160" fill="#94a3b8" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="500">
+      서울 부동산 거시·미시 스트레스 테스트 &amp; 시장 예측
+    </text>
+
+    <!-- Key Feature Badges -->
+    <g transform="translate(0, 210)">
+      <rect x="0" y="0" width="160" height="42" rx="8" fill="#1e293b" stroke="#334155" />
+      <text x="80" y="26" fill="#38bdf8" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" text-anchor="middle">보유세 정밀 계산</text>
+
+      <rect x="175" y="0" width="160" height="42" rx="8" fill="#1e293b" stroke="#334155" />
+      <text x="255" y="26" fill="#fb923c" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" text-anchor="middle">역전세 갭투자 리스크</text>
+
+      <rect x="350" y="0" width="160" height="42" rx="8" fill="#1e293b" stroke="#334155" />
+      <text x="430" y="26" fill="#f87171" font-family="system-ui, sans-serif" font-size="14" font-weight="bold" text-anchor="middle">25개 구 붕괴위험도</text>
+    </g>
+
+    <!-- Subtitle / URL -->
+    <text x="0" y="320" fill="#64748b" font-family="monospace" font-size="16">
+      https://eljja.github.io/real_estate/
+    </text>
+  </g>
+
+  <!-- Right Visual Mockup Card -->
+  <g transform="translate(700, 110)">
+    <rect width="420" height="400" rx="20" fill="url(#cardGrad)" stroke="#334155" stroke-width="1.5" />
+    
+    <!-- Header of Card -->
+    <circle cx="30" cy="30" r="6" fill="#ef4444" />
+    <circle cx="50" cy="30" r="6" fill="#f59e0b" />
+    <circle cx="70" cy="30" r="6" fill="#22c55e" />
+    <line x1="0" y1="60" x2="420" y2="60" stroke="#334155" />
+
+    <!-- Simulated Chart Bars -->
+    <g transform="translate(40, 100)">
+      <!-- Bar 1 -->
+      <rect x="30" y="140" width="35" height="110" rx="4" fill="#3b82f6" />
+      <rect x="75" y="170" width="35" height="80" rx="4" fill="#64748b" opacity="0.6" />
+      
+      <!-- Bar 2 -->
+      <rect x="150" y="90" width="35" height="160" rx="4" fill="#3b82f6" />
+      <rect x="195" y="130" width="35" height="120" rx="4" fill="#64748b" opacity="0.6" />
+
+      <!-- Bar 3 -->
+      <rect x="270" y="30" width="35" height="220" rx="4" fill="#ef4444" />
+      <rect x="315" y="110" width="35" height="140" rx="4" fill="#991b1b" opacity="0.5" />
+
+      <line x1="0" y1="250" x2="360" y2="250" stroke="#475569" stroke-width="1.5" />
+      
+      <text x="70" y="275" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">1주택자</text>
+      <text x="190" y="275" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">2주택자</text>
+      <text x="310" y="275" fill="#f87171" font-family="system-ui, sans-serif" font-size="12" font-weight="bold" text-anchor="middle">3주택 이상</text>
+    </g>
+  </g>
+</svg>
