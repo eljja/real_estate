@@ -28,6 +28,7 @@ export interface SimParams {
     gap: number;
     hsi: number;
     supply: number;
+    liquidity: number;
     population: number;
   };
 }
@@ -70,9 +71,10 @@ const defaultParams: SimParams = {
   crsWeights: {
     jeonse: 0.25,
     gap: 0.20,
-    hsi: 0.25,
+    hsi: 0.20,
     supply: 0.15,
-    population: 0.15
+    liquidity: 0.10,
+    population: 0.10
   }
 };
 

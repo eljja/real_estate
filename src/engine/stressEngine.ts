@@ -38,7 +38,7 @@ export interface CrsWeights {
 }
 
 export function getHsiLevel(hsi: number): { level: 'safe' | 'caution' | 'warning' | 'danger' | 'collapse'; label: string; desc: string } {
-  if (hsi < 0.30) {
+  if (!Number.isFinite(hsi) || hsi < 0.30) {
     return { level: 'safe', label: '안정적 (여유)', desc: '가구 소득 대비 주거비 지출이 30% 미만으로 현금흐름이 매우 건전합니다.' };
   }
   if (hsi < 0.50) {
@@ -54,6 +54,7 @@ export function getHsiLevel(hsi: number): { level: 'safe' | 'caution' | 'warning
 }
 
 export function getCrsLevel(crs: number): { level: '매우 안전' | '안전' | '주의' | '위험' | '붕괴 위기'; label: string } {
+  if (!Number.isFinite(crs)) return { level: '주의', label: '주의' };
   if (crs < 25) return { level: '매우 안전', label: '매우 안전' };
   if (crs < 45) return { level: '안전', label: '안전' };
   if (crs < 65) return { level: '주의', label: '주의' };
@@ -93,7 +94,8 @@ export function calculateHSI(
   const discretionaryCashflow = disposableIncome - netAnnualCost - basicLivingCost;
 
   const hsi = annualIncome > 0 ? netAnnualCost / annualIncome : 1.0;
-  const levelInfo = getHsiLevel(hsi);
+  const safeHsi = Number.isFinite(hsi) ? hsi : 0.5;
+  const levelInfo = getHsiLevel(safeHsi);
 
   return {
     annualPropertyTax: Math.round(annualTax * 0.45),
@@ -104,7 +106,7 @@ export function calculateHSI(
     netAnnualCost: Math.round(netAnnualCost),
     disposableIncome,
     discretionaryCashflow: Math.round(discretionaryCashflow),
-    hsi,
+    hsi: safeHsi,
     hsiLevel: levelInfo.level,
     hsiLabel: levelInfo.label,
     distressDescription: levelInfo.desc
@@ -118,67 +120,63 @@ export function calculateCrashRiskScore(
   district: DistrictData,
   hsi: number,
   jeonseChangeRate: number = 0,
-  weights: CrsWeights = {
-    jeonse: 0.25,
-    gap: 0.20,
-    hsi: 0.20,
-    supply: 0.15,
-    liquidity: 0.10,
-    population: 0.10
-  }
+  weights?: Partial<CrsWeights>
 ): CrashRiskResult {
-  // 1. 전세가율 & 역전세 위험도 (0~100): 전세가율 40% 이하=0점, 70% 이상=100점 + 전세가 하락 충격 반영
-  const baseJeonseRisk = Math.min(100, Math.max(0, ((district.jeonseRatio - 0.40) / 0.30) * 100));
-  const reverseJeonsePenalty = Math.max(0, -jeonseChangeRate * 120);
+  const w: CrsWeights = {
+    jeonse: weights?.jeonse ?? 0.25,
+    gap: weights?.gap ?? 0.20,
+    hsi: weights?.hsi ?? 0.20,
+    supply: weights?.supply ?? 0.15,
+    liquidity: weights?.liquidity ?? 0.10,
+    population: weights?.population ?? 0.10
+  };
+
+  const jeonseRatio = district?.jeonseRatio ?? 0.5;
+  const baseJeonseRisk = Math.min(100, Math.max(0, ((jeonseRatio - 0.40) / 0.30) * 100));
+  const reverseJeonsePenalty = Math.max(0, -(jeonseChangeRate || 0) * 120);
   const jeonseRisk = Math.min(100, baseJeonseRisk + reverseJeonsePenalty);
 
-  // 2. 갭투자 & 다주택 밀집도 (0~100)
   const gapLevelScore = {
     low: 15,
     medium: 40,
     high: 70,
     very_high: 95
-  }[district.gapInvestmentLevel];
-  const multiHomeHoldingScore = Math.min(100, Math.max(0, (district.multiHomeHoldingRatio / 40) * 100));
+  }[district?.gapInvestmentLevel ?? 'medium'] ?? 40;
+  const multiHomeHoldingScore = Math.min(100, Math.max(0, ((district?.multiHomeHoldingRatio ?? 25) / 40) * 100));
   const gapInvestmentRisk = Math.round(gapLevelScore * 0.6 + multiHomeHoldingScore * 0.4);
 
-  // 3. 다주택 HSI 부채상환 압력 (0~100)
-  const multiHomeHsiRisk = Math.min(100, Math.max(0, (hsi / 1.2) * 100));
+  const safeHsi = Number.isFinite(hsi) ? hsi : 0.5;
+  const multiHomeHsiRisk = Math.min(100, Math.max(0, (safeHsi / 1.2) * 100));
 
-  // 4. 공급 & 미분양 위험도 (0~100): 3년 입주물량 / 세대수 비중 + 미분양
-  const supplyRatio = (district.supplyNext3Years / (district.population * 4000)) * 100; // 세대당 인구 2.5명 환산
+  const pop = district?.population ?? 35;
+  const supplyUnits = district?.supplyNext3Years ?? 3000;
+  const supplyRatio = (supplyUnits / (pop * 4000)) * 100;
   const supplyScore = Math.min(100, supplyRatio * 20);
-  const unsoldScore = Math.min(100, (district.unsoldUnits / 150) * 100);
+  const unsoldScore = Math.min(100, ((district?.unsoldUnits ?? 20) / 150) * 100);
   const supplyInventoryRisk = Math.round(supplyScore * 0.7 + unsoldScore * 0.3);
 
-  // 5. 거래 유동성 위축 위험 (0~100): 유동성 점수가 낮을수록 위험
-  const liquidityContractionRisk = Math.max(0, 100 - district.liquidityScore);
+  const liquidityContractionRisk = Math.max(0, 100 - (district?.liquidityScore ?? 75));
+  const populationRisk = pop < 25 ? 75 : pop < 35 ? 50 : 25;
 
-  // 6. 인구 유출 위험 (0~100)
-  const populationRisk = district.population < 25 ? 75 : district.population < 35 ? 50 : 25;
-
-  // 종합 가중 합산
-  const totalCrs = (
-    jeonseRisk * weights.jeonse +
-    gapInvestmentRisk * weights.gap +
-    multiHomeHsiRisk * weights.hsi +
-    supplyInventoryRisk * weights.supply +
-    liquidityContractionRisk * weights.liquidity +
-    populationRisk * weights.population
+  const rawTotalCrs = (
+    jeonseRisk * w.jeonse +
+    gapInvestmentRisk * w.gap +
+    multiHomeHsiRisk * w.hsi +
+    supplyInventoryRisk * w.supply +
+    liquidityContractionRisk * w.liquidity +
+    populationRisk * w.population
   );
 
+  const totalCrs = Number.isFinite(rawTotalCrs) ? Math.round(rawTotalCrs * 10) / 10 : 50;
   const levelInfo = getCrsLevel(totalCrs);
-
-  // 급매 출회 추정 확률
   const fireSaleProbability = Math.min(95, Math.max(5, Math.round(totalCrs * 0.95)));
 
-  // 취약성 유형 분류
   let vulnerabilityType: '역전세 취약' | '종부세 고부담' | '공급과잉 우려' | '안정형' = '안정형';
-  if (district.jeonseRatio >= 0.60 && district.gapInvestmentLevel === 'very_high') {
+  if ((district?.jeonseRatio ?? 0) >= 0.60 && district?.gapInvestmentLevel === 'very_high') {
     vulnerabilityType = '역전세 취약';
-  } else if (district.avgSalePrice >= 170000 && district.isRegulated) {
+  } else if ((district?.avgSalePrice ?? 0) >= 170000 && district?.isRegulated) {
     vulnerabilityType = '종부세 고부담';
-  } else if (district.supplyNext3Years >= 9000) {
+  } else if ((district?.supplyNext3Years ?? 0) >= 9000) {
     vulnerabilityType = '공급과잉 우려';
   }
 
@@ -189,7 +187,7 @@ export function calculateCrashRiskScore(
     supplyInventoryRisk: Math.round(supplyInventoryRisk),
     liquidityContractionRisk: Math.round(liquidityContractionRisk),
     populationRisk: Math.round(populationRisk),
-    totalCrs: Math.round(totalCrs * 10) / 10,
+    totalCrs,
     crsLevel: levelInfo.level,
     fireSaleProbability,
     vulnerabilityType
