@@ -25,17 +25,22 @@ import {
 export default function BubbleIndexTab() {
   const { params } = useSimStore();
   const [selectedIndicator, setSelectedIndicator] = useState<BubbleIndicatorResult | null>(null);
+  const [benchmarkMode, setBenchmarkMode] = useState<'macro' | 'custom'>('macro');
 
   const indicators = useMemo(() => {
+    const isMacro = benchmarkMode === 'macro';
+    const evalPrice = isMacro ? 115000 : params.propertyPrice;
+    const evalIncome = isMacro ? 6800 : params.annualIncome;
+
     return calculateAllIndicators({
-      medianPrice: params.propertyPrice,
-      medianIncome: params.annualIncome,
-      annualRent: params.propertyPrice * (params.conversionRate / 100),
+      medianPrice: evalPrice,
+      medianIncome: evalIncome,
+      annualRent: evalPrice * (params.conversionRate / 100),
       mortgageRate: params.baseRate + 1.5,
       ltvRatio: params.ltvLimit,
-      constructionCost: params.propertyPrice * 0.68
+      constructionCost: evalPrice * 0.68
     });
-  }, [params]);
+  }, [params, benchmarkMode]);
 
   const overall = useMemo(() => getOverallBubbleRisk(indicators), [indicators]);
 
@@ -79,19 +84,40 @@ export default function BubbleIndexTab() {
           </p>
         </div>
 
-        {/* 종합 위험도 뱃지 카드 */}
-        <div
-          className="px-4 py-2.5 rounded-xl border flex items-center gap-3 self-start md:self-auto shrink-0 shadow-xl"
-          style={{
-            backgroundColor: `${getRiskColor(overall.level)}15`,
-            borderColor: `${getRiskColor(overall.level)}50`
-          }}
-        >
-          <AlertTriangle style={{ color: getRiskColor(overall.level) }} size={22} />
-          <div>
-            <div className="text-[10px] uppercase font-bold text-gray-400">종합 거시 버블 판정</div>
-            <div className="text-sm font-extrabold" style={{ color: getRiskColor(overall.level) }}>
-              {overall.label} (위험 지표: {overall.dangerCount}/8개)
+        {/* 기준 토글 & 종합 위험도 뱃지 */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-gray-900 p-1 rounded-xl border border-gray-800 text-xs">
+            <button
+              onClick={() => setBenchmarkMode('macro')}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
+                benchmarkMode === 'macro' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              서울 거시 중위가 (11.5억)
+            </button>
+            <button
+              onClick={() => setBenchmarkMode('custom')}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
+                benchmarkMode === 'custom' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              내 주택가 ({Math.round(params.propertyPrice / 10000)}억)
+            </button>
+          </div>
+
+          <div
+            className="px-4 py-2.5 rounded-xl border flex items-center gap-3 shrink-0 shadow-xl"
+            style={{
+              backgroundColor: `${getRiskColor(overall.level)}15`,
+              borderColor: `${getRiskColor(overall.level)}50`
+            }}
+          >
+            <AlertTriangle style={{ color: getRiskColor(overall.level) }} size={22} />
+            <div>
+              <div className="text-[10px] uppercase font-bold text-gray-400">종합 거시 버블 판정</div>
+              <div className="text-sm font-extrabold" style={{ color: getRiskColor(overall.level) }}>
+                {overall.label} (위험 지표: {overall.dangerCount}/8개)
+              </div>
             </div>
           </div>
         </div>

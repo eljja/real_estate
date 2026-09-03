@@ -11,6 +11,7 @@ export interface PropertyTaxResult {
 export interface ComprehensiveTaxResult {
   taxBase: number;
   baseTax: number;
+  propertyTaxDeduction: number; // 재산세 중복과세 공제액
   ageDeduction: number;
   holdingDeduction: number;
   totalDeduction: number;
@@ -89,6 +90,7 @@ export function calculateComprehensiveTax(
     return {
       taxBase: 0,
       baseTax: 0,
+      propertyTaxDeduction: 0,
       ageDeduction: 0,
       holdingDeduction: 0,
       totalDeduction: 0,
@@ -109,8 +111,15 @@ export function calculateComprehensiveTax(
   }
 
   const multiplier = overrides?.cptMultiplier ?? 1.0;
-  let rawTax = taxBase * (selectedBracket.rate / 100) * multiplier - selectedBracket.deduction;
+  // 종부세 누진공제액 스케일링: 세율에 배율이 곱해지면 누진공제액도 동일 배율로 스케일링되어야 누진세 곡선이 유지됨
+  const scaledDeduction = selectedBracket.deduction * multiplier;
+  let rawTax = (taxBase * (selectedBracket.rate / 100) * multiplier) - scaledDeduction;
   let baseTax = Math.max(0, rawTax);
+
+  // 재산세 중복과세액 공제 (종부세법 제9조 제3항)
+  // 종부세 과세표준에 이미 부과된 재산세 상당액을 차감 (표준 가중 재산세율 약 0.24% 적용)
+  const propertyTaxDeduction = Math.round(taxBase * 0.0024);
+  baseTax = Math.max(0, baseTax - propertyTaxDeduction);
 
   let ageDeductionRate = 0;
   let holdingDeductionRate = 0;
@@ -136,14 +145,23 @@ export function calculateComprehensiveTax(
   const ruralSpecialTax = baseTax * (crtConfig.specialRuralTaxRate / 100);
   const totalComprehensiveTax = baseTax + ruralSpecialTax;
 
-  return { taxBase, baseTax, ageDeduction, holdingDeduction, totalDeduction, ruralSpecialTax, totalComprehensiveTax };
+  return {
+    taxBase,
+    baseTax,
+    propertyTaxDeduction,
+    ageDeduction,
+    holdingDeduction,
+    totalDeduction,
+    ruralSpecialTax,
+    totalComprehensiveTax
+  };
 }
 
 export function calculateAcquisitionTax(
   salePrice: number,
   numberOfHomes: number,
   isRegulated: boolean,
-  area: number
+  area: number = 84
 ): AcquisitionTaxResult {
   let baseRate = 0.01;
   if (numberOfHomes === 1) {

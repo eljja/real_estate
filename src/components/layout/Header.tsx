@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSimStore } from '../../store/useSimStore';
 import { scenarioPresets } from '../../data/scenarioPresets';
-import { Building2, RotateCcw, Printer, Sparkles, Percent, ShieldAlert } from 'lucide-react';
+import { Building2, RotateCcw, Printer, Sparkles, Percent, ShieldAlert, Share2, Check } from 'lucide-react';
 
 export default function Header() {
   const { selectedScenario, setSelectedScenario, setParams, resetParams, params, setActiveTab } = useSimStore();
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
 
   const handleScenarioChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const scenarioId = e.target.value;
@@ -85,6 +92,15 @@ export default function Header() {
           >
             <Printer size={13} />
             <span className="hidden sm:inline">진단 리포트</span>
+          </button>
+
+          <button
+            onClick={handleCopyLink}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 text-xs font-semibold transition-all"
+            title="현재 시뮬레이션 설정 링크 복사"
+          >
+            {copied ? <Check size={13} className="text-emerald-400" /> : <Share2 size={13} className="text-blue-400" />}
+            <span className="hidden sm:inline">{copied ? '복사완료!' : '공유'}</span>
           </button>
 
           <button

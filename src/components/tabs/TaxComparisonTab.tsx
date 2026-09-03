@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSimStore } from '../../store/useSimStore';
-import { calculateAnnualHoldingTax } from '../../engine/taxEngine';
+import { calculateAnnualHoldingTax, calculateAcquisitionTax, calculateCapitalGainsTax } from '../../engine/taxEngine';
 import { calculateHSI, calculateMortgagePayment, getHsiLevel } from '../../engine/stressEngine';
 import { formatManWon, formatManWonCompact, formatPercent } from '../../utils/formatters';
 import { getHsiColor, getHsiLabel } from '../../utils/colorScale';
@@ -33,6 +33,10 @@ export default function TaxComparisonTab() {
   // Y축 최대값 제어 (수동 조절 옵션)
   const [taxYMax, setTaxYMax] = useState<number>(0); // 0이면 자동(Auto)
   const [costYMax, setCostYMax] = useState<number>(0); // 0이면 자동(Auto)
+
+  // 거래세(취득세 & 양도소득세) 시뮬레이션 상태
+  const [showTransactionTax, setShowTransactionTax] = useState(false);
+  const [acquisitionPriceInput, setAcquisitionPriceInput] = useState<number>(Math.round(params.propertyPrice * 0.65));
 
   // 2026 현행 기준 상수 파라미터
   const BASELINE_2026 = useMemo(() => ({
@@ -150,6 +154,18 @@ export default function TaxComparisonTab() {
       tax3: t3.totalAnnual
     };
   });
+
+  const transactionTax = useMemo(() => {
+    const acq1 = calculateAcquisitionTax(params.propertyPrice, 1, false, 84);
+    const acq2NonReg = calculateAcquisitionTax(params.propertyPrice, 2, false, 84);
+    const acq2Reg = calculateAcquisitionTax(params.propertyPrice, 2, true, 84);
+    const acq3Reg = calculateAcquisitionTax(params.propertyPrice, 3, true, 84);
+
+    const cgt1 = calculateCapitalGainsTax(params.propertyPrice, acquisitionPriceInput, 1, params.holdingYears, params.residenceYears);
+    const cgt3 = calculateCapitalGainsTax(params.propertyPrice, acquisitionPriceInput, 3, params.holdingYears, 0);
+
+    return { acq1, acq2NonReg, acq2Reg, acq3Reg, cgt1, cgt3 };
+  }, [params.propertyPrice, params.holdingYears, params.residenceYears, acquisitionPriceInput]);
 
   return (
     <div className="p-6 space-y-8 text-gray-200 max-w-7xl mx-auto">
@@ -475,7 +491,155 @@ export default function TaxComparisonTab() {
 
       </div>
 
-      {/* 주택 가격대별 HSI 스트레스 테이블 */}
+      {/* 거래세(취득세 & 양도소득세) 모의 진단 카드 */}
+      <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-gray-100 flex items-center gap-2">
+              <Landmark size={18} className="text-blue-400" />
+              거래세 모의 계산 (취득세 &amp; 양도소득세 정밀 진단)
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              현재 매매가({formatManWon(params.propertyPrice)}) 기준, 보유 주택수별 취득세 및 장기보유특별공제(최대 80%) 반영 양도소득세를 비교합니다.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowTransactionTax(!showTransactionTax)}
+            className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs text-blue-400 font-bold transition-colors self-start sm:self-auto border border-gray-700"
+          >
+            {showTransactionTax ? '▲ 접기' : '▼ 거래세 계산기 펼치기'}
+          </button>
+        </div>
+
+        {showTransactionTax && (
+          <div className="space-y-5 animate-in fade-in">
+            {/* 1. 취득세 비교 카드 */}
+            <div>
+              <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                1. 신규 매수 시 취득세 비교 (전용 84㎡ 기준)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-gray-800/60 rounded-lg border border-gray-700">
+                  <div className="flex justify-between text-gray-400">
+                    <span>1주택 취득 (표준)</span>
+                    <span className="text-emerald-400 font-bold">{(transactionTax.acq1.baseRate * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="text-base font-extrabold text-gray-100 mt-1">
+                    {formatManWon(transactionTax.acq1.totalAcquisitionTax)}
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-1">
+                    본세 {formatManWon(transactionTax.acq1.baseTax)} + 지방교육세 등
+                  </div>
+                </div>
+
+                <div className="p-3 bg-gray-800/60 rounded-lg border border-gray-700">
+                  <div className="flex justify-between text-gray-400">
+                    <span>2주택 취득 (조정지역)</span>
+                    <span className="text-orange-400 font-bold">8.0% 중과</span>
+                  </div>
+                  <div className="text-base font-extrabold text-orange-400 mt-1">
+                    {formatManWon(transactionTax.acq2Reg.totalAcquisitionTax)}
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-1">
+                    비조정지역 시: {formatManWon(transactionTax.acq2NonReg.totalAcquisitionTax)}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-gray-800/60 rounded-lg border border-gray-700">
+                  <div className="flex justify-between text-gray-400">
+                    <span>3주택 이상 취득</span>
+                    <span className="text-red-400 font-bold">12.0% 중과</span>
+                  </div>
+                  <div className="text-base font-extrabold text-red-400 mt-1">
+                    {formatManWon(transactionTax.acq3Reg.totalAcquisitionTax)}
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-1">
+                    다주택자 취득 규제 최고 세율 적용
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. 양도소득세 비교 카드 */}
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                  2. 현재 매각 시 양도소득세 비교
+                </h4>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-400">과거 취득가액 가정:</span>
+                  <input
+                    type="number"
+                    value={acquisitionPriceInput}
+                    onChange={(e) => setAcquisitionPriceInput(Number(e.target.value))}
+                    step={5000}
+                    className="bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-right text-gray-100 w-28 text-xs font-bold"
+                  />
+                  <span className="text-gray-400">만원</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {/* 1주택자 */}
+                <div className="p-4 bg-gray-800/60 rounded-lg border border-gray-700 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-emerald-400">1세대 1주택자 (실거주 비과세/장특공)</span>
+                    <span className="text-[10px] bg-emerald-950/80 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800/40 font-semibold">
+                      12억 비과세 적용
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-gray-300">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">총 양도차익:</span>
+                      <span>{formatManWon(transactionTax.cgt1.gain)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">12억 초과 과세대상 차익:</span>
+                      <span>{formatManWon(transactionTax.cgt1.taxableGain)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">장기보유특별공제(보유{params.holdingYears}년/거주{params.residenceYears}년):</span>
+                      <span className="text-emerald-400 font-semibold">-{formatManWon(transactionTax.cgt1.longTermDeduction)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-gray-700/60 font-bold">
+                      <span className="text-gray-200">최종 납부 양도세(지방세 포함):</span>
+                      <span className="text-base text-emerald-400 font-black">{formatManWon(transactionTax.cgt1.totalCapitalGainsTax)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 다주택자 */}
+                <div className="p-4 bg-gray-800/60 rounded-lg border border-gray-700 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-red-400">다주택자 (일반/중과 대상)</span>
+                    <span className="text-[10px] bg-red-950/80 text-red-400 px-2 py-0.5 rounded border border-red-800/40 font-semibold">
+                      비과세 없음 (전액 과세)
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-gray-300">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">총 양도차익:</span>
+                      <span>{formatManWon(transactionTax.cgt3.gain)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">과세표준:</span>
+                      <span>{formatManWon(transactionTax.cgt3.taxableIncome)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">일반 장특공(보유{params.holdingYears}년):</span>
+                      <span className="text-gray-400">-{formatManWon(transactionTax.cgt3.longTermDeduction)}</span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-gray-700/60 font-bold">
+                      <span className="text-gray-200">최종 납부 양도세(지방세 포함):</span>
+                      <span className="text-base text-red-400 font-black">{formatManWon(transactionTax.cgt3.totalCapitalGainsTax)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
         <h3 className="text-lg font-bold mb-1 text-gray-100">주택 매매가별 보유 한계선(HSI) 비교</h3>
         <p className="text-xs text-gray-400 mb-4">

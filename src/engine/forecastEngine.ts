@@ -140,39 +140,36 @@ export function forecastDistrict(
 }
 
 /**
- * 12개 분기 시계열 궤적 시뮬레이션 (Bull/Base/Bear 밴드 포함)
+ * 12개 분기 시계열 궤적 시뮬레이션 (forecastDistrict 예측 결과와 100% 수학적 동기화)
  */
 export function generateTimeSeriesProjection(
   district: DistrictData,
   params: ForecastParams,
-  quarters: number = 12
+  quarters: number = 12,
+  forecastResult?: DistrictForecast
 ): TimeSeriesPoint[] {
   const result: TimeSeriesPoint[] = [];
-  let currentPrice = district.avgSalePrice;
-  let currentJeonse = district.avgJeonsePrice;
-  let currentHsi = 0.45;
+  const startPrice = district.avgSalePrice;
+  const startJeonse = district.avgJeonsePrice;
+  
+  const forecast = forecastResult ?? forecastDistrict(district, params, 0.65, 60);
+  const targetPrice3Y = forecast.predicted3YearPrice;
+  const targetJeonse3Y = Math.round(startJeonse * (1 + (forecast.jeonseChangeRate3Year / 100)));
 
-  const qChangeRate = (params.jeonseChangeRate * 0.3) - (params.baseRate - 3.0) * 0.008 - (params.taxBurdenChange * 0.005);
+  // 분기별 실질 복리 변동률 산출
+  const totalGrowthRatio = targetPrice3Y / startPrice;
+  const nominalQRate = Math.pow(Math.max(0.1, totalGrowthRatio), 1 / quarters) - 1;
+  const nominalJeonseQRate = Math.pow(Math.max(0.1, targetJeonse3Y / startJeonse), 1 / quarters) - 1;
 
   for (let q = 1; q <= quarters; q++) {
-    // 분기별 시차 효과 및 비선형 복합 충격
-    const timeDecay = Math.exp(-q * 0.05);
-    const feedbackStress = currentHsi > 0.7 ? -0.012 : 0.003;
-    const netQGrowth = qChangeRate * timeDecay + feedbackStress;
+    const weight = q / quarters;
+    const currentPrice = q === quarters ? targetPrice3Y : Math.round(startPrice * Math.pow(1 + nominalQRate, q));
+    const currentJeonse = q === quarters ? targetJeonse3Y : Math.round(startJeonse * Math.pow(1 + nominalJeonseQRate, q));
 
-    currentPrice = Math.round(currentPrice * (1 + netQGrowth));
-    currentJeonse = Math.round(currentJeonse * (1 + (params.jeonseChangeRate / quarters)));
-
-    if (netQGrowth < 0) {
-      currentHsi = Math.min(1.2, currentHsi + 0.03);
-    } else {
-      currentHsi = Math.max(0.2, currentHsi - 0.01);
-    }
-
-    // 예측 오차 밴드 (불확실성 상/하한선)
-    const bandSpan = (q * 0.015) * currentPrice;
+    // 시간 경과에 따른 예측 신뢰구간 (불확실성 상/하한선)
+    const bandSpan = (q * 0.012) * currentPrice;
     const bullPrice = Math.round(currentPrice + bandSpan);
-    const bearPrice = Math.round(currentPrice - bandSpan * 1.3);
+    const bearPrice = Math.round(currentPrice - bandSpan * 1.25);
 
     result.push({
       quarter: q,
@@ -181,8 +178,8 @@ export function generateTimeSeriesProjection(
       bullPrice,
       bearPrice,
       jeonsePrice: currentJeonse,
-      hsiStress: Math.round(currentHsi * 100),
-      marketLiquidity: Math.max(10, Math.min(100, Math.round(80 - q * 3 + (netQGrowth > 0 ? 15 : -20))))
+      hsiStress: Math.min(100, Math.max(10, Math.round(forecast.sellPressure * (0.8 + weight * 0.4)))),
+      marketLiquidity: Math.min(100, Math.max(10, Math.round(forecast.buyingPower * (1.1 - weight * 0.3))))
     });
   }
 

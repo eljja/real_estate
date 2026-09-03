@@ -49,9 +49,13 @@ export default function SimulationTab() {
     };
   }, [params]);
 
-  const timeSeries = useMemo(() => {
-    return generateTimeSeriesProjection(targetDistrict, forecastParams, 12);
+  const currentForecast = useMemo(() => {
+    return forecastDistrict(targetDistrict, forecastParams, 0.65, 60);
   }, [targetDistrict, forecastParams]);
+
+  const timeSeries = useMemo(() => {
+    return generateTimeSeriesProjection(targetDistrict, forecastParams, 12, currentForecast);
+  }, [targetDistrict, forecastParams, currentForecast]);
 
   const allForecasts = useMemo(() => {
     return seoulDistricts.map(d => {
@@ -70,10 +74,6 @@ export default function SimulationTab() {
       return matchRegion && matchSearch;
     });
   }, [allForecasts, regionFilter, searchQuery]);
-
-  const currentForecast = useMemo(() => {
-    return forecastDistrict(targetDistrict, forecastParams, 0.65, 60);
-  }, [targetDistrict, forecastParams]);
 
   return (
     <div className="p-6 space-y-8 text-gray-200 max-w-7xl mx-auto">
